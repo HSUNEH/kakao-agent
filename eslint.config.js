@@ -13,10 +13,10 @@ export default tseslint.config(
     }
   },
   {
-    files: ['**/*.js'],
+    files: ['**/*.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked]
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '*.tgz']
+    ignores: ['dist/**', 'node_modules/**', '.omx/**', '*.tgz']
   }
 );
