@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { getMessagesDbPath } from './paths.js';
+import { resolveRoomDisplayName } from './rooms.js';
 
 export interface MessageResult {
   speaker: string;
@@ -23,6 +24,10 @@ interface MessageRow {
   messageType: string | null;
   mediaMeta: string | null;
   systemEventType: string | null;
+}
+
+interface RoomContext {
+  displayName: string;
 }
 
 const MAX_LIMIT = 200;
@@ -64,9 +69,7 @@ export function searchMessages(options: {
       LIMIT ?
     `);
     const likeQuery = `%${escapeLike(query)}%`;
-    return statement
-      .all(...options.whitelistedRoomIds, likeQuery, limit)
-      .map((row) => toMessageResult(row));
+    return toMessageResults(db, statement.all(...options.whitelistedRoomIds, likeQuery, limit));
   } finally {
     db.close();
   }
@@ -98,9 +101,10 @@ export function summarizeRoom(options: {
       ORDER BY logId ASC
       LIMIT ?
     `);
-    return statement
-      .all(options.roomId, options.periodFrom, options.periodTo, limit)
-      .map((row) => toMessageResult(row));
+    return toMessageResults(
+      db,
+      statement.all(options.roomId, options.periodFrom, options.periodTo, limit)
+    );
   } finally {
     db.close();
   }
@@ -140,7 +144,7 @@ export function crossRoomQuery(options: {
     const args: unknown[] = [...options.whitelistedRoomIds];
     if (hasPeriod) args.push(options.periodFrom ?? 0, options.periodTo ?? Date.now());
     args.push(`%${escapeLike(query)}%`, limit);
-    return statement.all(...args).map((row) => toMessageResult(row));
+    return toMessageResults(db, statement.all(...args));
   } finally {
     db.close();
   }
@@ -169,10 +173,64 @@ function ensureSchema(db: Database.Database): void {
   `);
 }
 
-function toMessageResult(row: MessageRow): MessageResult {
+function toMessageResults(db: Database.Database, rows: MessageRow[]): MessageResult[] {
+  const roomCache = new Map<number, RoomContext>();
+  return rows.map((row) => toMessageResult(row, getRoomContext(db, row, roomCache).displayName));
+}
+
+function getRoomContext(
+  db: Database.Database,
+  row: MessageRow,
+  cache: Map<number, RoomContext>
+): RoomContext {
+  const cached = cache.get(row.chatroomId);
+  if (cached) return cached;
+
+  const storedRoomDisplayName = getStoredRoomDisplayName(db, row.chatroomId) ?? row.roomDisplayName;
+  const senderIds = getRoomSenderIds(db, row.chatroomId);
+  const resolved = resolveRoomDisplayName({
+    chatroomId: row.chatroomId,
+    storedRoomDisplayName,
+    senderIds
+  });
+  const context = { displayName: resolved.displayName };
+  cache.set(row.chatroomId, context);
+  return context;
+}
+
+function getStoredRoomDisplayName(db: Database.Database, chatroomId: number): string | null {
+  const row = db
+    .prepare<[number], { roomDisplayName: string | null }>(
+      `
+        SELECT roomDisplayName
+        FROM messages
+        WHERE chatroomId = ? AND TRIM(roomDisplayName) <> ''
+        ORDER BY timestamp DESC, logId DESC
+        LIMIT 1
+      `
+    )
+    .get(chatroomId);
+  return row?.roomDisplayName ?? null;
+}
+
+function getRoomSenderIds(db: Database.Database, chatroomId: number): string[] {
+  return db
+    .prepare<[number], { senderId: string | null }>(
+      `
+        SELECT DISTINCT senderId
+        FROM messages
+        WHERE chatroomId = ? AND senderId IS NOT NULL AND TRIM(senderId) <> ''
+      `
+    )
+    .all(chatroomId)
+    .map((sender) => sender.senderId)
+    .filter((sender): sender is string => sender !== null);
+}
+
+function toMessageResult(row: MessageRow, roomName: string): MessageResult {
   return {
     speaker: row.senderName ?? String(row.senderId ?? 'unknown'),
-    roomName: row.roomDisplayName ?? `chatroom:${row.chatroomId}`,
+    roomName,
     chatroomId: row.chatroomId,
     timestamp: row.timestamp,
     logId: row.logId,

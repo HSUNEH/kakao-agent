@@ -147,11 +147,15 @@ kakao-agent auth status
 kakao-agent whoami
 kakao-agent status
 kakao-agent doctor
+kakao-agent rooms list
+kakao-agent rooms alias <chatroomId|fingerprint> <name>
+kakao-agent whitelist add <chatroomId>
+kakao-agent whitelist list
 kakao-agent ingest once
 kakao-agent daemon --once
 ```
 
-These commands prepare and inspect local runtime state on the PC running the agent. `setup` creates config/DB files with restrictive defaults, `status` reports auth/DB/whitelist/daemon/last-error state, and `doctor` checks Node, macOS, Keychain availability, config, DB permissions, and MCP binary readiness.
+These commands prepare and inspect local runtime state on the PC running the agent. `setup` creates config/DB files with restrictive defaults, `status` reports auth/DB/whitelist/daemon/last-error state, and `doctor` checks Node, macOS, Keychain availability, config, DB permissions, room alias config, and MCP binary readiness.
 
 Login recovery status is intentionally conservative: credentials are never written to YAML/JSON/env files, and live Kakao LOCO login/reconnect is still a follow-up integration. Until that integration lands, `auth status` and `whoami` report Keychain credential presence and `live: false`.
 
@@ -166,6 +170,34 @@ Minimal whitelist example:
 ```yaml
 chatroomIds:
   - 123456789
+```
+
+Room display names are resolved at query time, so alias changes are hot-reloaded without restarting the MCP server. Precedence is:
+
+1. `~/.kakao-agent/rooms.yaml` alias by `chatroomId`
+2. `rooms.yaml` alias by member fingerprint
+3. stored/LOCO room title from collected metadata
+4. deterministic member fingerprint fallback (`[fp:<hex12>] N명 방`) for rooms such as open chats that do not expose a stable title locally
+
+For collectors built on `agent-kakaotalk`, prefer collecting room names with `chat list --all --resolve-titles`. That path resolves the actual Kakao server title from `CHATINFO.chatInfo.chatMetas` (`type: 3`) and can fall back to `INFOLINK.ols[].ln` for open-link room names. If those values are unavailable, `kakao-agent` still exposes the fingerprint fallback so operators can attach a stable alias.
+
+Alias example:
+
+```yaml
+aliases:
+  '123456789': '가족방'
+  'a3f9b2c8d1e4': '오픈채팅 별명'
+```
+
+Useful commands:
+
+```bash
+kakao-agent rooms list
+kakao-agent rooms alias 123456789 가족방
+kakao-agent rooms alias a3f9b2c8d1e4 오픈채팅 별명
+kakao-agent rooms unalias 123456789
+kakao-agent whitelist add 123456789
+kakao-agent whitelist remove 123456789
 ```
 
 The local SQLite table is created automatically if missing. Ingestion is still a follow-up task, but seeded or collected rows should use the `messages` table columns from the KakaoMessage ontology: `logId`, `chatroomId`, `roomDisplayName`, `senderId`, `senderName`, `messageType`, `content`, `mediaMeta`, `replyTargetLogId`, `systemEventType`, `timestamp`, `isDeleted`, and `collectedAt`.
@@ -214,4 +246,5 @@ A successful smoke test prints JSON with `ok: true`, all three tool names, and a
 - **No live Kakao auth** — live LOCO auth is not implemented in the bootstrap skeleton. Live LOCO login lands in later issues; local `auth status`, `whoami`, `status`, and `doctor` are available now for recovery readiness checks.
 - **Empty whitelist or no collected messages** — v0.1 is privacy-first: collection/search should return nothing until rooms are explicitly whitelisted and ingestion has run.
 - **Search returns `[]`** — this is expected until `~/.kakao-agent/whitelist.yaml` lists room IDs and `~/.kakao-agent/messages.db` contains collected/seeded messages.
+- **Open chat room name is blank or generic** — run `kakao-agent rooms list`, copy the fingerprint shown for that room, then set `kakao-agent rooms alias <fingerprint> <name>`. The alias is applied on the next MCP query.
 - **Live Kakao auth is missing** — live LOCO auth and ingestion are separate follow-up tasks; the MCP query layer is read-only and local-DB backed.

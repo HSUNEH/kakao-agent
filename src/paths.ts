@@ -12,3 +12,7 @@ export function getMessagesDbPath(): string {
 export function getWhitelistPath(): string {
   return process.env.KAKAO_AGENT_WHITELIST ?? join(getKakaoAgentHome(), 'whitelist.yaml');
 }
+
+export function getRoomsPath(): string {
+  return process.env.KAKAO_AGENT_ROOMS ?? join(getKakaoAgentHome(), 'rooms.yaml');
+}

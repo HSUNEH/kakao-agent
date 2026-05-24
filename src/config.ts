@@ -1,9 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { getKakaoAgentHome, getWhitelistPath } from './paths.js';
+import { ensureRoomsConfig } from './rooms.js';
 
-const DEFAULT_WHITELIST = `# kakao-agent whitelist\n# Privacy default: empty/off. Add chatroom IDs only after explicit consent.\nchatroomIds: []\n`;
+const DEFAULT_WHITELIST = `# kakao-agent whitelist
+# Privacy default: empty/off. Add chatroom IDs only after explicit consent.
+chatroomIds: []
+`;
 
 export interface WhitelistConfig {
   chatroomIds: number[];
@@ -18,20 +22,50 @@ export function ensureConfigFiles(): void {
   if (!existsSync(whitelistPath)) {
     writeFileSync(whitelistPath, DEFAULT_WHITELIST, { mode: 0o600 });
   }
+  ensureRoomsConfig();
 }
 
 export function loadWhitelist(): WhitelistConfig {
   ensureConfigFiles();
   const path = getWhitelistPath();
   const raw = readFileSync(path, 'utf8');
-  const parsed = parse(raw) as unknown;
-  const values = extractChatroomIds(parsed);
-  const numericValues = values.map((value) => Number(value));
-  if (!numericValues.every((value) => Number.isSafeInteger(value))) {
-    throw new Error(`Invalid whitelist entries in ${path}; expected integer chatroom IDs.`);
+  let parsed: unknown;
+  try {
+    parsed = parse(raw) as unknown;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid whitelist.yaml at ${path}: ${message}`);
   }
 
+  const numericValues = extractChatroomIds(parsed).map(normalizeChatroomId);
   return { chatroomIds: [...new Set(numericValues)], path };
+}
+
+export function saveWhitelist(chatroomIds: number[]): WhitelistConfig {
+  ensureConfigFiles();
+  const normalized = [...new Set(chatroomIds.map(normalizeChatroomId))].sort((a, b) => a - b);
+  writeFileSync(getWhitelistPath(), stringify({ chatroomIds: normalized }), { mode: 0o600 });
+  return loadWhitelist();
+}
+
+export function addWhitelistRoom(chatroomId: string | number): WhitelistConfig {
+  const current = loadWhitelist();
+  return saveWhitelist([...current.chatroomIds, normalizeChatroomId(chatroomId)]);
+}
+
+export function removeWhitelistRoom(chatroomId: string | number): WhitelistConfig {
+  const target = normalizeChatroomId(chatroomId);
+  const current = loadWhitelist();
+  return saveWhitelist(current.chatroomIds.filter((id) => id !== target));
+}
+
+export function normalizeChatroomId(value: unknown): number {
+  const numeric =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN;
+  if (!Number.isSafeInteger(numeric)) {
+    throw new Error('Expected integer chatroom ID.');
+  }
+  return numeric;
 }
 
 function extractChatroomIds(parsed: unknown): unknown[] {

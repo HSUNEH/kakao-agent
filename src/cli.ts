@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 import { openMessagesDb } from './database.js';
 import { startMcpServer } from './mcp-server.js';
-import { ensureConfigFiles, loadWhitelist } from './config.js';
+import {
+  addWhitelistRoom,
+  ensureConfigFiles,
+  loadWhitelist,
+  removeWhitelistRoom
+} from './config.js';
 import { getKeychainStatus } from './keychain.js';
 import { runDaemon } from './daemon.js';
 import { getRuntimeStatus } from './status.js';
+import {
+  loadRoomAliases,
+  removeRoomAlias,
+  resolveRoomDisplayName,
+  updateRoomAlias
+} from './rooms.js';
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -33,6 +44,12 @@ async function main(): Promise<void> {
       throw new Error('Usage: kakao-agent auth status');
     case 'whoami':
       whoami();
+      return;
+    case 'rooms':
+      rooms(argv.slice(1));
+      return;
+    case 'whitelist':
+      whitelist(argv.slice(1));
       return;
     case 'ingest':
       if (subcommand === 'once') {
@@ -81,6 +98,7 @@ function doctor(): void {
       detail: status.db.permissions
     },
     { name: 'whitelist_config', ok: true, detail: `${status.whitelist.count} whitelisted rooms` },
+    { name: 'room_aliases', ok: true, detail: `${loadRoomAliases().path}` },
     { name: 'mcp_binary', ok: true, detail: 'kakao-agent without args starts stdio MCP server' },
     {
       name: 'live_auth',
@@ -101,6 +119,106 @@ function whoami(): void {
     recoveryReady: auth.recoveryReady,
     reason: auth.reason
   });
+}
+
+function rooms(args: string[]): void {
+  const [subcommand, identifier, ...nameParts] = args;
+  switch (subcommand) {
+    case 'list':
+    case undefined:
+      listRooms();
+      return;
+    case 'alias':
+      if (!identifier || nameParts.length === 0) {
+        throw new Error('Usage: kakao-agent rooms alias <chatroomId|fingerprint> <name>');
+      }
+      printJson({ ok: true, ...updateRoomAlias(identifier, nameParts.join(' ')) });
+      return;
+    case 'unalias':
+      if (!identifier) throw new Error('Usage: kakao-agent rooms unalias <chatroomId|fingerprint>');
+      printJson({ ok: true, ...removeRoomAlias(identifier) });
+      return;
+    default:
+      throw new Error(
+        'Usage: kakao-agent rooms [list] | rooms alias <chatroomId|fingerprint> <name>'
+      );
+  }
+}
+
+function whitelist(args: string[]): void {
+  const [subcommand, roomId] = args;
+  switch (subcommand) {
+    case 'list':
+    case undefined:
+      printJson(loadWhitelist());
+      return;
+    case 'add':
+      if (!roomId) throw new Error('Usage: kakao-agent whitelist add <chatroomId>');
+      printJson({ ok: true, ...addWhitelistRoom(roomId) });
+      return;
+    case 'remove':
+      if (!roomId) throw new Error('Usage: kakao-agent whitelist remove <chatroomId>');
+      printJson({ ok: true, ...removeWhitelistRoom(roomId) });
+      return;
+    default:
+      throw new Error('Usage: kakao-agent whitelist [list] | whitelist add/remove <chatroomId>');
+  }
+}
+
+function listRooms(): void {
+  ensureConfigFiles();
+  const whitelist = loadWhitelist();
+  const aliases = loadRoomAliases();
+  const db = openMessagesDb();
+  try {
+    const rows = db
+      .prepare<[], { chatroomId: number; roomDisplayName: string | null; messageCount: number }>(
+        `
+          SELECT chatroomId, MAX(NULLIF(roomDisplayName, '')) AS roomDisplayName, COUNT(*) AS messageCount
+          FROM messages
+          GROUP BY chatroomId
+          ORDER BY chatroomId ASC
+        `
+      )
+      .all();
+    const senderStatement = db.prepare<[number], { senderId: string | null }>(
+      `
+        SELECT DISTINCT senderId
+        FROM messages
+        WHERE chatroomId = ? AND senderId IS NOT NULL AND TRIM(senderId) <> ''
+      `
+    );
+
+    const rooms = rows.map((row) => {
+      const senderIds = senderStatement
+        .all(row.chatroomId)
+        .map((sender) => sender.senderId)
+        .filter((sender): sender is string => sender !== null);
+      const resolved = resolveRoomDisplayName({
+        chatroomId: row.chatroomId,
+        storedRoomDisplayName: row.roomDisplayName,
+        senderIds
+      });
+      return {
+        chatroomId: row.chatroomId,
+        displayName: resolved.displayName,
+        source: resolved.source,
+        fingerprint: resolved.fingerprint,
+        memberCount: resolved.memberCount,
+        messageCount: row.messageCount,
+        whitelisted: whitelist.chatroomIds.includes(row.chatroomId)
+      };
+    });
+
+    printJson({
+      rooms,
+      aliases: aliases.aliases,
+      aliasesPath: aliases.path,
+      whitelistPath: whitelist.path
+    });
+  } finally {
+    db.close();
+  }
 }
 
 function ingestOnce(): void {
@@ -124,6 +242,12 @@ Commands:
   whoami            Show stored account identity if available
   status            Print auth, DB, whitelist, daemon, and last-error status
   doctor            Run local readiness checks
+  rooms list        Show known rooms, aliases, fingerprints, and whitelist status
+  rooms alias       Set alias: rooms alias <chatroomId|fingerprint> <name>
+  rooms unalias     Remove alias: rooms unalias <chatroomId|fingerprint>
+  whitelist list    Show whitelisted room IDs
+  whitelist add     Allow MCP search for a room ID
+  whitelist remove  Remove a room ID from MCP search
   ingest once       Safe no-op until live LOCO ingestion is integrated
   daemon [--once]   Run foreground health/recovery observability loop
   mcp | serve       Run stdio MCP server explicitly
