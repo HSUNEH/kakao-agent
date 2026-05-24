@@ -1,0 +1,46 @@
+{
+  "name": "kakao-agent",
+  "version": "0.1.0",
+  "description": "KakaoTalk macOS MCP server for LOCO tablet-slot message collection and search.",
+  "type": "module",
+  "license": "MIT",
+  "author": "HSUNEH",
+  "homepage": "https://github.com/HSUNEH/kakao-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HSUNEH/kakao-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HSUNEH/kakao-agent/issues"
+  },
+  "bin": {
+    "kakao-agent": "dist/mcp-server.js"
+  },
+  "files": [
+    "dist/",
+    "manifest.yaml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^20.19.41",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
+  }
+}
