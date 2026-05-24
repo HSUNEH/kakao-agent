@@ -137,6 +137,26 @@ Load kakao-agent from its agentskills.io manifest, list tools, then call search_
 
 Current behavior: each tool is registered and callable. Search tools query the local SQLite message DB and only return messages from rooms listed in `~/.kakao-agent/whitelist.yaml`. Live Kakao ingestion/auth is still implemented in later issues.
 
+## CLI operations and recovery readiness
+
+`kakao-agent` with no arguments still starts the stdio MCP server for Hermes, Claude Code, Codex, and OpenClaw. Operational commands are available when arguments are provided:
+
+```bash
+kakao-agent setup
+kakao-agent auth status
+kakao-agent whoami
+kakao-agent status
+kakao-agent doctor
+kakao-agent ingest once
+kakao-agent daemon --once
+```
+
+These commands prepare and inspect local runtime state on the PC running the agent. `setup` creates config/DB files with restrictive defaults, `status` reports auth/DB/whitelist/daemon/last-error state, and `doctor` checks Node, macOS, Keychain availability, config, DB permissions, and MCP binary readiness.
+
+Login recovery status is intentionally conservative: credentials are never written to YAML/JSON/env files, and live Kakao LOCO login/reconnect is still a follow-up integration. Until that integration lands, `auth status` and `whoami` report Keychain credential presence and `live: false`.
+
+`daemon --once` writes a structured health event under `~/.kakao-agent/logs/daemon.log`. Running `daemon` without `--once` starts the foreground health loop for development/testing.
+
 ## Local DB search setup
 
 `kakao-agent` is read-only. It searches `~/.kakao-agent/messages.db` and only returns rows whose `chatroomId` is listed in `~/.kakao-agent/whitelist.yaml`. Missing config files are created with privacy-safe empty defaults on first tool call.
@@ -191,7 +211,7 @@ A successful smoke test prints JSON with `ok: true`, all three tool names, and a
 
 - **`npx kakao-agent` fails** — the package may not be published yet. Use the local checkout command (`node /absolute/path/to/dist/mcp-server.js`) after `npm run build`.
 - **Node version errors** — install Node.js 20 LTS or newer.
-- **No live Kakao auth** — live LOCO auth is not implemented in the bootstrap skeleton. Auth-related commands and real message reads land in later issues.
+- **No live Kakao auth** — live LOCO auth is not implemented in the bootstrap skeleton. Live LOCO login lands in later issues; local `auth status`, `whoami`, `status`, and `doctor` are available now for recovery readiness checks.
 - **Empty whitelist or no collected messages** — v0.1 is privacy-first: collection/search should return nothing until rooms are explicitly whitelisted and ingestion has run.
 - **Search returns `[]`** — this is expected until `~/.kakao-agent/whitelist.yaml` lists room IDs and `~/.kakao-agent/messages.db` contains collected/seeded messages.
 - **Live Kakao auth is missing** — live LOCO auth and ingestion are separate follow-up tasks; the MCP query layer is read-only and local-DB backed.

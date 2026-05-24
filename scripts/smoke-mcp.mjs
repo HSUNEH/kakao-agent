@@ -7,7 +7,7 @@ const expectedTools = ['cross_room_query', 'search_messages', 'summarize_room'];
 const command = process.env.KAKAO_AGENT_MCP_COMMAND ?? process.execPath;
 const args = process.env.KAKAO_AGENT_MCP_ARGS
   ? JSON.parse(process.env.KAKAO_AGENT_MCP_ARGS)
-  : ['dist/mcp-server.js'];
+  : ['dist/cli.js'];
 
 if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
   throw new TypeError('KAKAO_AGENT_MCP_ARGS must be a JSON array of strings.');

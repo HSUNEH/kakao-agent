@@ -51,7 +51,7 @@ db.close();
 
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: ['dist/mcp-server.js'],
+  args: ['dist/cli.js'],
   env: {
     ...process.env,
     KAKAO_AGENT_HOME: home,
