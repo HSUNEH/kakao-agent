@@ -4,7 +4,7 @@ KakaoTalk macOS MCP server — LOCO tablet-slot collection, summarize/search/cro
 
 ## Status
 
-This repository currently contains the v0.1 MCP bootstrap skeleton. The stdio server exposes the planned tool surface and returns explicit placeholder errors until the ingestion and query tasks are implemented.
+This repository currently contains the v0.1 MCP server skeleton plus a local SQLite-backed read-only query layer. Live Kakao auth and ingestion are still follow-up work, but MCP hosts can call the tools against `~/.kakao-agent/messages.db`.
 
 ## Requirements
 
@@ -66,7 +66,7 @@ Smoke prompt:
 
 ```text
 Use kakao-agent to list available MCP tools, then call search_messages with query "테스트".
-It is OK if the current bootstrap build returns a registered-but-not-implemented placeholder error.
+An empty result is OK before rooms are whitelisted and messages are collected or seeded.
 ```
 
 ### Claude Code
@@ -87,7 +87,7 @@ Smoke prompt:
 
 ```text
 Use kakao-agent to search my whitelisted KakaoTalk rooms for "테스트" and show speaker, room, timestamp, and message.
-If the tool reports that it is registered but not implemented yet, report that the MCP roundtrip succeeded.
+If it returns an empty result, report that the MCP roundtrip succeeded and no local whitelisted messages matched yet.
 ```
 
 ### Codex
@@ -135,7 +135,20 @@ Load kakao-agent from its agentskills.io manifest, list tools, then call search_
 - `search_messages(query)` — searches collected messages.
 - `cross_room_query(query, periodFrom?, periodTo?)` — queries across whitelisted rooms.
 
-Current bootstrap behavior: each tool is registered and callable, but returns a placeholder error until ingestion/search issues are implemented.
+Current behavior: each tool is registered and callable. Search tools query the local SQLite message DB and only return messages from rooms listed in `~/.kakao-agent/whitelist.yaml`. Live Kakao ingestion/auth is still implemented in later issues.
+
+## Local DB search setup
+
+`kakao-agent` is read-only. It searches `~/.kakao-agent/messages.db` and only returns rows whose `chatroomId` is listed in `~/.kakao-agent/whitelist.yaml`. Missing config files are created with privacy-safe empty defaults on first tool call.
+
+Minimal whitelist example:
+
+```yaml
+chatroomIds:
+  - 123456789
+```
+
+The local SQLite table is created automatically if missing. Ingestion is still a follow-up task, but seeded or collected rows should use the `messages` table columns from the KakaoMessage ontology: `logId`, `chatroomId`, `roomDisplayName`, `senderId`, `senderName`, `messageType`, `content`, `mediaMeta`, `replyTargetLogId`, `systemEventType`, `timestamp`, `isDeleted`, and `collectedAt`.
 
 ## Development
 
@@ -172,7 +185,7 @@ The default smoke test starts `node dist/mcp-server.js`. To test another command
 KAKAO_AGENT_MCP_COMMAND=npx KAKAO_AGENT_MCP_ARGS='["kakao-agent"]' node scripts/smoke-mcp.mjs
 ```
 
-A successful smoke test prints JSON with `ok: true`, all three tool names, and a `toolCall.responseKind`. The current bootstrap build reports `placeholder-error`; later real search implementations may report `success-response`.
+A successful smoke test prints JSON with `ok: true`, all three tool names, and a `toolCall.responseKind`. With an empty default whitelist, the call returns a valid empty result. To verify real local DB querying and whitelist enforcement, run `npm run smoke:search`.
 
 ## Troubleshooting
 
@@ -180,4 +193,5 @@ A successful smoke test prints JSON with `ok: true`, all three tool names, and a
 - **Node version errors** — install Node.js 20 LTS or newer.
 - **No live Kakao auth** — live LOCO auth is not implemented in the bootstrap skeleton. Auth-related commands and real message reads land in later issues.
 - **Empty whitelist or no collected messages** — v0.1 is privacy-first: collection/search should return nothing until rooms are explicitly whitelisted and ingestion has run.
-- **Tool returns “registered but not implemented yet”** — this is the expected bootstrap response. It means spawn, list-tools, and tool-call roundtrip are working.
+- **Search returns `[]`** — this is expected until `~/.kakao-agent/whitelist.yaml` lists room IDs and `~/.kakao-agent/messages.db` contains collected/seeded messages.
+- **Live Kakao auth is missing** — live LOCO auth and ingestion are separate follow-up tasks; the MCP query layer is read-only and local-DB backed.

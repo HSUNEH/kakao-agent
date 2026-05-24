@@ -32,13 +32,17 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepack": "npm run build",
-    "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs"
+    "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs",
+    "smoke:search": "npm run build && node scripts/smoke-mcp-search.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.10.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.41",
     "eslint": "^9.39.1",
     "prettier": "^3.6.2",
