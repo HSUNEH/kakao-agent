@@ -43,7 +43,7 @@ Core direction:
 - easy pause/kill switch before scaling live automation
 - no accidental cross-room memory leakage
 
-See [`docs/room-policy.md`](docs/room-policy.md) for the canonical room behavior table, policy pipeline, deterministic test fakes, and env-isolation rules.
+See [`docs/room-policy.md`](docs/room-policy.md) for the canonical room behavior table, policy pipeline, deterministic test fakes, temp runtime-path redirection, and env-isolation rules.
 
 ## MCP registration
 

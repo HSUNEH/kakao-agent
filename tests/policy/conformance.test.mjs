@@ -12,6 +12,7 @@ import {
 import { FakeKakaoClient } from '../fakes/kakao-client.mjs';
 import { FakeMacOSBridge } from '../fakes/macos-bridge.mjs';
 import { makeLocoMessageEvent } from '../fakes/loco-events.mjs';
+import { FakeKeychain } from '../fakes/keychain.mjs';
 import { fakeRooms, roomModesById } from '../fakes/rooms.mjs';
 
 test('room behavior table covers all canonical OSS modes', () => {
@@ -178,6 +179,21 @@ test('canonical fakes are deterministic and carry source attribution', async () 
   const bridge = new FakeMacOSBridge();
   const dryRun = await bridge.sendMessage(fakeRooms.family.chatroomId, '안녕', { dryRun: true });
   assert.deepEqual(dryRun, { chatroomId: fakeRooms.family.chatroomId, text: '안녕', dryRun: true });
+});
+
+test('fake keychain is deterministic and never requires real macOS credentials', async () => {
+  const keychain = new FakeKeychain();
+  assert.deepEqual(await keychain.status('kakao-agent', 'tester'), {
+    service: 'kakao-agent',
+    account: 'tester',
+    available: true,
+    stored: false
+  });
+  await keychain.write('kakao-agent', 'tester', 'secret');
+  assert.equal(await keychain.read('kakao-agent', 'tester'), 'secret');
+  assert.equal((await keychain.status('kakao-agent', 'tester')).stored, true);
+  assert.equal(await keychain.delete('kakao-agent', 'tester'), true);
+  assert.equal(await keychain.read('kakao-agent', 'tester'), null);
 });
 
 test('default room policy is read-only intelligence', () => {

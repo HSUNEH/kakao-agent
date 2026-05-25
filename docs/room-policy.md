@@ -23,7 +23,8 @@ Platform adapters should translate events only. Decisions about room permission,
 
 ## Safety rules
 
-- Tests must not inherit live operator runtime variables such as `KAKAO_*`, `LOCO_*`, `HERMES_*`, `DISCORD_*`, `TELEGRAM_*`, or `SLACK_*` unless a test explicitly allowlists a variable.
+- Tests must not inherit live operator runtime variables such as `KAKAO_*`, `AGENT_KAKAO_*`, `LOCO_*`, `HERMES_*`, `OPENCLAW_*`, `DISCORD_*`, `TELEGRAM_*`, or `SLACK_*` unless a test explicitly allowlists a variable.
+- Test setup redirects `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME`, `KAKAO_AGENT_HOME`, DB, whitelist, and rooms paths to per-test temp directories.
 - Memory is never cross-room by default. Even personal-assistant memory is room-scoped and requires explicit enablement.
 - Sending or external effects require a dry-run preview and explicit confirmation.
 - Read-only intelligence rooms can be searched/summarized but cannot send messages or perform external effects.
@@ -35,6 +36,7 @@ Canonical deterministic fakes live under `tests/fakes/`:
 
 - `kakao-client.mjs` — stable fake chat/message client
 - `loco-events.mjs` — normalized LOCO-like event fixtures
+- `keychain.mjs` — in-memory fake Keychain that never reads macOS credentials
 - `macos-bridge.mjs` — fake dry-run send bridge
 - `rooms.mjs` — canonical room-mode fixtures
 
