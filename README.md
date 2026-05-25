@@ -28,6 +28,23 @@ npm install
 npm run build
 ```
 
+## OSS safety model
+
+kakao-agent is positioned as a privacy-first local KakaoTalk agent runtime for searching, summarizing, and safely automating conversations with explicit room policies, source attribution, and side-effect gates.
+
+Core direction:
+
+- local-first runtime on the user's machine
+- user-owned credentials/session; no credentials in YAML/JSON/env config unless a platform integration explicitly owns that storage
+- explicit room-scoped permissions and allowlists
+- source-attributed search and summaries
+- dry-run plus confirmation before message sends or external effects
+- audit logs for business/support-style rooms
+- easy pause/kill switch before scaling live automation
+- no accidental cross-room memory leakage
+
+See [`docs/room-policy.md`](docs/room-policy.md) for the canonical room behavior table, policy pipeline, deterministic test fakes, and env-isolation rules.
+
 ## MCP registration
 
 All hosts should start the same stdio server. Published-package examples use:

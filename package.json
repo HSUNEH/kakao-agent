@@ -20,6 +20,7 @@
     "dist/",
     "manifest.yaml",
     "scripts/",
+    "docs/",
     "README.md",
     "LICENSE"
   ],
@@ -34,7 +35,8 @@
     "prepack": "npm run build",
     "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs",
     "smoke:search": "npm run build && node scripts/smoke-mcp-search.mjs",
-    "smoke:cli": "npm run build && node scripts/smoke-cli.mjs"
+    "smoke:cli": "npm run build && node scripts/smoke-cli.mjs",
+    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
