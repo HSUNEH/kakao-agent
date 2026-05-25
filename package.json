@@ -36,7 +36,7 @@
     "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs",
     "smoke:search": "npm run build && node scripts/smoke-mcp-search.mjs",
     "smoke:cli": "npm run build && node scripts/smoke-cli.mjs",
-    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests"
+    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests/*.test.mjs tests/**/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
