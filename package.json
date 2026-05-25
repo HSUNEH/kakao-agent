@@ -1,0 +1,55 @@
+{
+  "name": "kakao-agent",
+  "version": "0.1.0",
+  "description": "KakaoTalk macOS MCP server for LOCO tablet-slot message collection and search.",
+  "type": "module",
+  "license": "MIT",
+  "author": "HSUNEH",
+  "homepage": "https://github.com/HSUNEH/kakao-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HSUNEH/kakao-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HSUNEH/kakao-agent/issues"
+  },
+  "bin": {
+    "kakao-agent": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "manifest.yaml",
+    "scripts/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepack": "npm run build",
+    "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs",
+    "smoke:search": "npm run build && node scripts/smoke-mcp-search.mjs",
+    "smoke:cli": "npm run build && node scripts/smoke-cli.mjs",
+    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.10.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.19.41",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
+  }
+}

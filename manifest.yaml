@@ -1,0 +1,47 @@
+schema_version: agentskills.io/v1
+kind: mcp-server
+name: kakao-agent
+display_name: Kakao Agent
+description: >-
+  KakaoTalk macOS MCP server exposing stdio tools for room summarization,
+  message search, and cross-room queries with source attribution.
+version: 0.1.0
+license: MIT
+repository: https://github.com/HSUNEH/kakao-agent
+runtime:
+  type: stdio
+  command: npx
+  args:
+    - kakao-agent
+entrypoint:
+  package: kakao-agent
+  bin: kakao-agent
+  command: npx kakao-agent
+capabilities:
+  tools:
+    - name: summarize_room
+      description: Return room messages in a requested epoch-ms time range for host-side summarization.
+      input_schema:
+        type: object
+        required: [roomId, periodFrom, periodTo]
+    - name: search_messages
+      description: Search collected KakaoTalk messages by free text.
+      input_schema:
+        type: object
+        required: [query]
+    - name: cross_room_query
+      description: Query candidate messages across whitelisted rooms.
+      input_schema:
+        type: object
+        required: [query]
+compatibility:
+  node: '>=20'
+  hosts:
+    - openclaw
+    - hermes-agent
+    - claude-code
+    - codex
+security:
+  notes:
+    - Uses an unofficial KakaoTalk LOCO integration in later tasks.
+    - Credentials must never be stored in plaintext configuration files.
