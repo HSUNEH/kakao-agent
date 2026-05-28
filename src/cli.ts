@@ -16,6 +16,7 @@ import {
   resolveRoomDisplayName,
   updateRoomAlias
 } from './rooms.js';
+import { runBootstrap, type BootstrapOptions } from './bootstrap/orchestrator.js';
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -57,6 +58,9 @@ async function main(): Promise<void> {
         return;
       }
       throw new Error('Usage: kakao-agent ingest once');
+    case 'bootstrap':
+      await bootstrap(argv.slice(1));
+      return;
     case 'daemon':
       await runDaemon({ once: argv.includes('--once'), intervalMs: readInterval(argv.slice(1)) });
       return;
@@ -231,6 +235,13 @@ function ingestOnce(): void {
   });
 }
 
+async function bootstrap(args: string[]): Promise<void> {
+  const options = parseBootstrapOptions(args);
+  const result = await runBootstrap(options);
+  printJson(result);
+  if (!result.ok) process.exitCode = 1;
+}
+
 function help(): void {
   console.log(`kakao-agent
 
@@ -249,9 +260,80 @@ Commands:
   whitelist add     Allow MCP search for a room ID
   whitelist remove  Remove a room ID from MCP search
   ingest once       Safe no-op until live LOCO ingestion is integrated
+  bootstrap         Backfill whitelisted rooms from KakaoTalk export text
   daemon [--once]   Run foreground health/recovery observability loop
   mcp | serve       Run stdio MCP server explicitly
 `);
+}
+
+function parseBootstrapOptions(args: string[]): BootstrapOptions {
+  const options: BootstrapOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    switch (arg) {
+      case '--fixture-dir':
+        options.fixtureDir = readOptionValue(args, ++index, arg);
+        break;
+      case '--export-file':
+        options.exportFile = readOptionValue(args, ++index, arg);
+        break;
+      case '--room':
+        options.roomId = toSafeInteger(readOptionValue(args, ++index, arg), '--room');
+        break;
+      case '--force':
+        options.force = true;
+        break;
+      case '--retry-base-ms':
+        options.retryBaseMs = toSafeInteger(readOptionValue(args, ++index, arg), '--retry-base-ms');
+        break;
+      case '--max-attempts':
+        options.maxAttempts = toSafeInteger(readOptionValue(args, ++index, arg), '--max-attempts');
+        break;
+      case '--skip-preflight':
+        options.skipPreflight = true;
+        break;
+      case '--install-time':
+        options.installTime = readOptionValue(args, ++index, arg);
+        break;
+      case '--help':
+      case '-h':
+        console.log(`Usage: kakao-agent bootstrap [options]
+
+Options:
+  --fixture-dir <dir>     Read <roomId>.txt export files from a fixture/export directory
+  --export-file <path>    Backfill a single room from an explicit KakaoTalk export text file
+  --room <chatroomId>     Limit bootstrap to one whitelisted room
+  --force                 Re-process rooms already marked success
+  --retry-base-ms <ms>    Exponential retry base delay (default: 500)
+  --max-attempts <n>      Attempts per room (default: 3)
+  --skip-preflight        Skip live macOS Accessibility/KakaoTalk preflight checks
+  --install-time <iso>    Test override for captured install_time
+`);
+        process.exit(0);
+        break;
+      default:
+        throw new Error(`Unknown bootstrap option: ${arg}`);
+    }
+  }
+  if (options.retryBaseMs !== undefined && options.retryBaseMs < 0) {
+    throw new Error('--retry-base-ms must be >= 0');
+  }
+  if (options.maxAttempts !== undefined && options.maxAttempts < 1) {
+    throw new Error('--max-attempts must be >= 1');
+  }
+  return options;
+}
+
+function readOptionValue(args: string[], index: number, name: string): string {
+  const value = args[index];
+  if (!value) throw new Error(`${name} requires a value.`);
+  return value;
+}
+
+function toSafeInteger(value: string, name: string): number {
+  const numeric = Number(value);
+  if (!Number.isSafeInteger(numeric)) throw new Error(`${name} must be an integer.`);
+  return numeric;
 }
 
 function readInterval(args: string[]): number {

@@ -1,6 +1,6 @@
 {
   "name": "kakao-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "KakaoTalk macOS MCP server for LOCO tablet-slot message collection and search.",
   "type": "module",
   "license": "MIT",
@@ -22,7 +22,8 @@
     "scripts/",
     "docs/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"
@@ -36,7 +37,8 @@
     "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs",
     "smoke:search": "npm run build && node scripts/smoke-mcp-search.mjs",
     "smoke:cli": "npm run build && node scripts/smoke-cli.mjs",
-    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests/*.test.mjs tests/**/*.test.mjs"
+    "test": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests/*.test.mjs tests/policy/*.test.mjs",
+    "test:e2e": "npm run build && node --import ./tests/setup/env-isolation.mjs --test tests/e2e/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

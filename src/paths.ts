@@ -16,3 +16,13 @@ export function getWhitelistPath(): string {
 export function getRoomsPath(): string {
   return process.env.KAKAO_AGENT_ROOMS ?? join(getKakaoAgentHome(), 'rooms.yaml');
 }
+
+export function getBootstrapStatePath(): string {
+  return (
+    process.env.KAKAO_AGENT_BOOTSTRAP_STATE ?? join(getKakaoAgentHome(), 'bootstrap-state.yaml')
+  );
+}
+
+export function getExportsDir(): string {
+  return process.env.KAKAO_AGENT_EXPORTS_DIR ?? join(getKakaoAgentHome(), 'exports');
+}

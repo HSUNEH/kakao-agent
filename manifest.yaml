@@ -5,7 +5,7 @@ display_name: Kakao Agent
 description: >-
   KakaoTalk macOS MCP server exposing stdio tools for room summarization,
   message search, and cross-room queries with source attribution.
-version: 0.1.0
+version: 0.2.0
 license: MIT
 repository: https://github.com/HSUNEH/kakao-agent
 runtime:
