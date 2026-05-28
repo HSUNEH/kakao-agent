@@ -4,7 +4,7 @@ KakaoTalk macOS MCP server — LOCO tablet-slot collection, summarize/search/cro
 
 ## Status
 
-This repository currently contains the v0.1 MCP server skeleton plus a local SQLite-backed read-only query layer. Live Kakao auth and ingestion are still follow-up work, but MCP hosts can call the tools against `~/.kakao-agent/messages.db`.
+This repository currently contains the v0.2 bootstrap-backfill foundation plus a local SQLite-backed read-only query layer. Live Kakao auth and live Accessibility export automation are still follow-up work, but MCP hosts can call the tools against `~/.kakao-agent/messages.db`, including messages backfilled from KakaoTalk text exports.
 
 ## Requirements
 
@@ -168,6 +168,7 @@ kakao-agent rooms list
 kakao-agent rooms alias <chatroomId|fingerprint> <name>
 kakao-agent whitelist add <chatroomId>
 kakao-agent whitelist list
+kakao-agent bootstrap --fixture-dir ./tests/fixtures/export --skip-preflight
 kakao-agent ingest once
 kakao-agent daemon --once
 ```
@@ -177,6 +178,27 @@ These commands prepare and inspect local runtime state on the PC running the age
 Login recovery status is intentionally conservative: credentials are never written to YAML/JSON/env files, and live Kakao LOCO login/reconnect is still a follow-up integration. Until that integration lands, `auth status` and `whoami` report Keychain credential presence and `live: false`.
 
 `daemon --once` writes a structured health event under `~/.kakao-agent/logs/daemon.log`. Running `daemon` without `--once` starts the foreground health loop for development/testing.
+
+## v0.2 bootstrap backfill
+
+v0.2 supersedes the v0.1 read-only skeleton without changing the three MCP tool names, input schemas, or output fields. Internal DB rows now carry `source` and `parse_status`, but `summarize_room`, `search_messages`, and `cross_room_query` still return only the v0.1 message fields.
+
+Backfill flow:
+
+```bash
+kakao-agent whitelist add 123456789
+kakao-agent bootstrap --fixture-dir /path/to/kakaotalk-export-dir --skip-preflight
+```
+
+The fixture/export directory should contain one text file per whitelisted room, named `<chatroomId>.txt`. The parser supports Korean KakaoTalk export lines such as `[2026년 5월 27일 오후 9:01, 민수 : 본문]`, multiline continuations, system join/leave/title events, emoticon/media labels, and raw fallback rows when a line cannot be parsed safely.
+
+Runtime state:
+
+- `~/.kakao-agent/bootstrap-state.yaml` stores `install_time` once plus per-room `bootstrap_state`, `retry_count`, `last_error`, and `completed_at`.
+- `~/.kakao-agent/messages.db` has idempotent migration columns `source` (`loco` or `export`) and `parse_status` (`parsed` or `raw`), plus `bootstrap_meta.install_time`.
+- Reruns skip rooms already marked `success`; use `--force` to delete and rebuild existing `source: export` rows for the target room(s) without creating duplicates.
+
+Live macOS export automation is guarded by preflight checks before use. The initial preflight verifies macOS, Accessibility permission, KakaoTalk.app existence, and KakaoTalk version (`>= 4.3.0`). This release intentionally keeps live UI selector automation behind that boundary; deterministic fixture/pre-exported files are supported now.
 
 ## Local DB search setup
 
@@ -219,11 +241,15 @@ kakao-agent whitelist remove 123456789
 
 The local SQLite table is created automatically if missing. Ingestion is still a follow-up task, but seeded or collected rows should use the `messages` table columns from the KakaoMessage ontology: `logId`, `chatroomId`, `roomDisplayName`, `senderId`, `senderName`, `messageType`, `content`, `mediaMeta`, `replyTargetLogId`, `systemEventType`, `timestamp`, `isDeleted`, and `collectedAt`.
 
+For v0.2 and later, seeded or collected rows may omit `source` and `parse_status`; the migration defaults existing/v0.1 rows to `source: loco` and `parse_status: parsed`.
+
 ## Development
 
 ```bash
 npm install
 npm run build
+npm test
+npm run test:e2e
 npm run lint
 npm run format:check
 ```

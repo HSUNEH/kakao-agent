@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { getMessagesDbPath } from './paths.js';
 import { resolveRoomDisplayName } from './rooms.js';
+import type { MessageSource, ParsedExportMessage, ParseStatus } from './bootstrap/types.js';
 
 export interface MessageResult {
   speaker: string;
@@ -24,6 +25,10 @@ interface MessageRow {
   messageType: string | null;
   mediaMeta: string | null;
   systemEventType: string | null;
+}
+
+interface MessageColumnRow {
+  name: string;
 }
 
 interface RoomContext {
@@ -150,6 +155,81 @@ export function crossRoomQuery(options: {
   }
 }
 
+export function getBootstrapInstallTime(db: Database.Database): string | null {
+  ensureSchema(db);
+  const row = db
+    .prepare<[string], { value: string }>('SELECT value FROM bootstrap_meta WHERE key = ?')
+    .get('install_time');
+  return row?.value ?? null;
+}
+
+export function setBootstrapInstallTime(db: Database.Database, installTimeIso: string): void {
+  ensureSchema(db);
+  validateInstallTime(installTimeIso);
+  db.prepare<[string, string]>(
+    'INSERT OR IGNORE INTO bootstrap_meta (key, value) VALUES (?, ?)'
+  ).run('install_time', installTimeIso);
+}
+
+export function insertBackfillMessages(
+  db: Database.Database,
+  messages: ParsedExportMessage[],
+  installTimeIso: string,
+  options: { replaceRoomId?: number } = {}
+): { inserted: number; skipped: number; replaced: number } {
+  ensureSchema(db);
+  const installTimeMs = validateInstallTime(installTimeIso);
+  const statement = db.prepare(`
+    INSERT OR IGNORE INTO messages (
+      logId, chatroomId, roomDisplayName, senderId, senderName, messageType,
+      content, mediaMeta, replyTargetLogId, systemEventType, timestamp, isDeleted,
+      collectedAt, source, parse_status
+    ) VALUES (
+      @logId, @chatroomId, @roomDisplayName, @senderId, @senderName, @messageType,
+      @content, @mediaMeta, NULL, @systemEventType, @timestamp, @isDeleted,
+      @collectedAt, @source, @parseStatus
+    )
+  `);
+  const write = db.transaction((rows: ParsedExportMessage[]) => {
+    let replaced = 0;
+    if (options.replaceRoomId !== undefined) {
+      replaced = db
+        .prepare<[number]>("DELETE FROM messages WHERE chatroomId = ? AND source = 'export'")
+        .run(options.replaceRoomId).changes;
+    }
+    let inserted = 0;
+    let skipped = 0;
+    for (const row of rows) {
+      assertMessageSourceCutoff(row, installTimeMs);
+      const result = statement.run(row);
+      if (result.changes > 0) inserted += 1;
+      else skipped += 1;
+    }
+    return { inserted, skipped, replaced };
+  });
+  return write(messages);
+}
+
+/**
+ * Provenance/cutoff invariant for every message writer.
+ *
+ * Future LOCO/live ingestion paths must route writes through this contract (or an equivalent
+ * stricter helper) so post-install live rows and pre-install export rows cannot overlap silently.
+ */
+export function assertMessageSourceCutoff(
+  message: { source: MessageSource; parseStatus?: ParseStatus; timestamp: number },
+  installTimeMs: number
+): void {
+  if (!Number.isSafeInteger(message.timestamp))
+    throw new Error('message timestamp must be safe integer');
+  if (message.source === 'loco' && message.timestamp < installTimeMs) {
+    throw new Error('LOCO messages older than install_time must not be inserted by backfill.');
+  }
+  if (message.source === 'export' && message.timestamp >= installTimeMs) {
+    throw new Error('Export backfill messages must be older than install_time.');
+  }
+}
+
 function ensureSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -170,7 +250,24 @@ function ensureSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_chatroom_timestamp ON messages (chatroomId, timestamp);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_chatroom_logid ON messages (chatroomId, logId);
+    CREATE TABLE IF NOT EXISTS bootstrap_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
+  addColumnIfMissing(db, 'messages', 'source', "TEXT NOT NULL DEFAULT 'loco'");
+  addColumnIfMissing(db, 'messages', 'parse_status', "TEXT NOT NULL DEFAULT 'parsed'");
+}
+
+function addColumnIfMissing(
+  db: Database.Database,
+  tableName: string,
+  columnName: string,
+  definition: string
+): void {
+  const columns = db.prepare<[], MessageColumnRow>(`PRAGMA table_info(${tableName})`).all();
+  if (columns.some((column) => column.name === columnName)) return;
+  db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function toMessageResults(db: Database.Database, rows: MessageRow[]): MessageResult[] {
@@ -256,6 +353,12 @@ function validateEpochRange(periodFrom: number, periodTo: number): void {
     throw new Error('periodFrom and periodTo must be epoch millisecond integers.');
   }
   if (periodFrom > periodTo) throw new Error('periodFrom must be <= periodTo.');
+}
+
+function validateInstallTime(installTimeIso: string): number {
+  const value = Date.parse(installTimeIso);
+  if (!Number.isSafeInteger(value)) throw new Error('install_time must be an ISO datetime.');
+  return value;
 }
 
 function normalizeLimit(limit: number | undefined): number {

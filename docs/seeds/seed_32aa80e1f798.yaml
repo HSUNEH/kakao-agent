@@ -1,0 +1,7 @@
+id: seed_32aa80e1f798
+status: archived
+superseded_by: v0.2-bootstrap-backfill
+superseded_issue: 25
+note: >-
+  v0.1 seed remains a compatibility marker. Bootstrap backfill work is tracked by
+  issues #25-#32 and must preserve v0.1 MCP tool signatures and output shape.
